@@ -698,7 +698,7 @@ class TemplateProcessor
                     if (preg_match('/(<[^<]+>)([^<]*)(' . preg_quote($varNameWithArgsFixed) . ')([^>]*)(<[^>]+>)/Uu', $partContent, $matches)) {
                         $wholeTag = $matches[0];
                         array_shift($matches);
-                        [$openTag, $prefix, , $postfix, $closeTag] = $matches;
+                        [$openTag, $prefix,, $postfix, $closeTag] = $matches;
                         $replaceXml = $openTag . $prefix . $closeTag . $xmlImage . $openTag . $postfix . $closeTag;
                         // replace on each iteration, because in one tag we can have 2+ inline variables => before proceed next variable we need to change $partContent
                         $partContent = $this->setValueForPart($wholeTag, $replaceXml, $partContent, $limit);
@@ -782,7 +782,8 @@ class TemplateProcessor
 
                 // If tmpXmlRow doesn't contain continue, this row is no longer part of the spanned row.
                 $tmpXmlRow = $this->getSlice($extraRowStart, $extraRowEnd);
-                if (!preg_match('#<w:vMerge/>#', $tmpXmlRow) &&
+                if (
+                    !preg_match('#<w:vMerge/>#', $tmpXmlRow) &&
                     !preg_match('#<w:vMerge w:val="continue"\s*/>#', $tmpXmlRow)
                 ) {
                     break;
@@ -844,7 +845,8 @@ class TemplateProcessor
 
                 // If tmpXmlRow doesn't contain continue, this row is no longer part of the spanned row.
                 $tmpXmlRow = $this->getSlice($extraRowStart, $extraRowEnd);
-                if (!preg_match('#<w:vMerge/>#', $tmpXmlRow) &&
+                if (
+                    !preg_match('#<w:vMerge/>#', $tmpXmlRow) &&
                     !preg_match('#<w:vMerge w:val="continue" />#', $tmpXmlRow)
                 ) {
                     break;
@@ -958,6 +960,71 @@ class TemplateProcessor
         }
     }
 
+    //public function replaceBlockRefactored($blockname, $replacement)
+    //{
+    //$this->tempDocumentMainPart = preg_replace(
+    //'/(\${' . $blockname . '})(.*?)(\${\/' . $blockname . '})/is',
+    //$replacement,
+    //$this->tempDocumentMainPart
+    //);
+    //}
+
+    /**
+     * Replace a block.
+     *
+     * @param string $blockname
+     * @param string $replacement
+     */
+    public function replaceBlockRefactored($blockname, $replacement): void
+    {
+        $matches = [];
+        $escapedMacroOpeningChars = preg_quote(self::$macroOpeningChars);
+        $escapedMacroClosingChars = preg_quote(self::$macroClosingChars);
+        preg_match_all(
+            '/(<w:p\s(?:(?!<w:p\s).)*?|<w:p>(?:(?!<w:p>).)*?)(' . $escapedMacroOpeningChars . $blockname . $escapedMacroClosingChars . ')(.*?)(' . $escapedMacroOpeningChars . '\/' . $blockname . $escapedMacroClosingChars . ')(.*?<\/w:p>)/is',
+            $this->tempDocumentMainPart,
+            $matches
+        );
+
+        if (isset($matches[0])) {
+            foreach ($matches[0] as $match){
+                $this->tempDocumentMainPart = str_replace(
+                    $match,
+                    $replacement,
+                    $this->tempDocumentMainPart
+                );
+            }
+        }
+    }
+
+    /**
+     * delete paragraph.
+     *
+     * @param string $placeholder
+     */
+    public function deleteParagraph($placeholder): void
+    {
+        $matches = [];
+        $escapedMacroOpeningChars = preg_quote(self::$macroOpeningChars);
+        $escapedMacroClosingChars = preg_quote(self::$macroClosingChars);
+        $rule = '@(<w:p\s(?:(?!<w:p\s).)*?|<w:p>(?:(?!<w:p>).)*?)('.$escapedMacroOpeningChars . $placeholder . $escapedMacroClosingChars .')(.*?</w:p>)@is';
+        preg_match_all(
+            $rule,
+            $this->tempDocumentMainPart,
+            $matches
+        );
+
+        if (isset($matches[0])) {
+            foreach ($matches[0] as $match) {
+                $this->tempDocumentMainPart = str_replace(
+                    $match,
+                    '',
+                    $this->tempDocumentMainPart
+                );
+            }
+        }
+    }
+
     /**
      * Delete a block of text.
      *
@@ -965,7 +1032,7 @@ class TemplateProcessor
      */
     public function deleteBlock($blockname): void
     {
-        $this->replaceBlock($blockname, '');
+        $this->replaceBlockRefactored($blockname, '');
     }
 
     /**
